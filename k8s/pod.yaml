@@ -1,0 +1,22 @@
+# kubectl apply -f k8s/pod.yaml && kubectl logs -f gramine-cheker
+# On clusters without the Intel SGX device plugin (e.g. GKE) delete the `resources` block,
+# otherwise the pod stays Pending. The check will then report whether SGX leaks through at all.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gramine-cheker
+spec:
+  restartPolicy: Never
+  containers:
+    - name: check
+      image: ubuntu:24.04
+      command: ["bash", "-c"]
+      args:
+        - apt-get update && apt-get install -y git &&
+          git clone https://github.com/tpluslabs/gramine-cheker /w && cd /w &&
+          ./install.sh && ./check.sh; sleep 3600  # time to `kubectl cp` results/
+      resources:
+        limits:
+          sgx.intel.com/epc: "512Mi"
+          sgx.intel.com/enclave: 1
+          sgx.intel.com/provision: 1

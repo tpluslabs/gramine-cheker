@@ -1,0 +1,19 @@
+libos.entrypoint = "/hello"
+loader.log_level = "error"
+loader.env.LD_LIBRARY_PATH = "/lib"
+
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/hello", uri = "file:hello" },
+]
+
+sgx.debug = false
+sgx.edmm_enable = {{ 'true' if edmm == '1' else 'false' }}
+sgx.enclave_size = "256M"
+sgx.max_threads = 4
+sgx.remote_attestation = "dcap"
+
+sgx.trusted_files = [
+  "file:hello",
+  "file:{{ gramine.runtimedir() }}/",
+]
