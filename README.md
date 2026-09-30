@@ -47,7 +47,7 @@ Gramine ≥ 1.9 supports **only** the upstream in-kernel driver, so **FLC is man
 | 10 | Kernel | `/dev/sgx_enclave` (rw for the user), `/dev/sgx_provision` (for attestation), `/dev` **not** `noexec` | `dev.*` |
 | 11 | Containers | Device nodes passed in (k8s: [Intel SGX device plugin](https://github.com/intel/intel-device-plugins-for-kubernetes), resources `sgx.intel.com/{epc,enclave,provision}`), aesmd socket reachable | `dev.*`, `aesmd` |
 | 12 | Userspace | `gramine` package (`gramine-sgx`, `gramine-manifest`, `gramine-sgx-sign`, `is-sgx-available`), signing key from `gramine-sgx-gen-private-key` (RSA-3072) | `gramine`, `build` |
-| 13 | Attestation | `sgx-aesm-service` + `libsgx-aesm-{launch,quote-ex,ecdsa}-plugin` (aesmd running, `/var/run/aesmd/aesm.socket`) | `aesmd` |
+| 13 | Attestation | `sgx-aesm-service` + `libsgx-aesm-{quote-ex,ecdsa}-plugin` (aesmd running, `/var/run/aesmd/aesm.socket`) | `aesmd` |
 | 14 | Attestation | `libsgx-dcap-default-qpl` + `/etc/sgx_default_qcnl.conf` pointing at a reachable PCCS (or at your provider's cache). EPID/IAS is dead (EOL April 2025), so it's DCAP only | `dcap.*` |
 | 15 | Attestation | Platform registered with Intel PCS. Single-socket boxes are fine by default; **multi-socket boxes need multi-package registration** (`sgx-ra-service` / MPA) before a PCK cert exists | `attest.dcap-quote` |
 | 16 | Keep current | TCB: microcode/BIOS recovery. An out-of-date TCB still produces quotes, but verifiers will report `OUT_OF_DATE`/`SW_HARDENING_NEEDED` | manual |

@@ -80,7 +80,7 @@ if [ -e /dev/sgx_enclave ]; then
     [ -r /dev/sgx_enclave ] && [ -w /dev/sgx_enclave ] || fail dev.sgx_enclave.rw "no rw access for $(id -un): add to its group"
     findmnt -no OPTIONS -T /dev/sgx_enclave | grep -qw noexec && fail dev.noexec "/dev mounted noexec: enclave mmap will fail"
 else
-    fail dev.sgx_enclave "missing (pod: needs sgx.intel.com/enclave from Intel SGX device plugin)"
+    fail dev.sgx_enclave "missing: kernel has no EPC (see epc/dmesg); in a pod: needs sgx.intel.com/enclave"
 fi
 [ -e /dev/sgx_provision ] && pass dev.sgx_provision || warn dev.sgx_provision "missing: DCAP attestation will fail"
 tot=$(cat /sys/devices/system/node/node*/x86/sgx_total_bytes 2>/dev/null | awk '{s+=$1} END {print s+0}')

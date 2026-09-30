@@ -19,7 +19,7 @@ $SUDO curl -fsSLo /usr/share/keyrings/intel-sgx-deb.asc https://download.01.org/
 echo "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-sgx-deb.asc] https://download.01.org/intel-sgx/sgx_repo/ubuntu $ICN main" \
     | $SUDO tee /etc/apt/sources.list.d/intel-sgx.list
 $SUDO apt-get update
-$SUDO apt-get install -y gramine sgx-aesm-service libsgx-aesm-launch-plugin libsgx-aesm-quote-ex-plugin \
+$SUDO apt-get install -y gramine sgx-aesm-service libsgx-aesm-quote-ex-plugin \
     libsgx-aesm-ecdsa-plugin libsgx-dcap-default-qpl
 
 for g in sgx sgx_prv; do getent group $g >/dev/null && $SUDO usermod -aG $g "$(id -un)"; done
