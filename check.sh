@@ -27,8 +27,9 @@ v=$(systemd-detect-virt 2>/dev/null); info virt "${v:-unknown}"
 { [ -f /.dockerenv ] || [ -f /run/.containerenv ]; } && info container docker/podman
 gce=$(curl -fs -m 2 -H Metadata-Flavor:Google http://metadata.google.internal/computeMetadata/v1/instance/machine-type 2>/dev/null)
 [ -n "$gce" ] && info gce-machine-type "${gce##*/}"
+az=$(curl -fs -m 2 -H Metadata:true "http://169.254.169.254/metadata/instance/compute/vmSize?api-version=2021-02-01&format=text" 2>/dev/null)
+[ -n "$az" ] && info azure-vm-size "$az"
 { flag tdx_guest || [ -e /dev/tdx_guest ]; } && info confidential-vm "Intel TDX guest (SGX is not available inside a TD)"
-[ -e /dev/sev-guest ] && info confidential-vm "AMD SEV-SNP guest (no SGX on AMD)"
 
 echo "== cpu"
 declare -A C=()

@@ -15,8 +15,8 @@ spec:
         - apt-get update && apt-get install -y git &&
           git clone https://github.com/tpluslabs/gramine-cheker /w && cd /w &&
           ./install.sh && ./check.sh; sleep 3600  # time to `kubectl cp` results/
-      resources:
-        limits:
-          sgx.intel.com/epc: "512Mi"
-          sgx.intel.com/enclave: 1
-          sgx.intel.com/provision: 1
+      #resources:
+      #  limits:
+      #    sgx.intel.com/epc: "512Mi"
+      #    sgx.intel.com/enclave: 1
+      #    sgx.intel.com/provision: 1

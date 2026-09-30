@@ -6,9 +6,11 @@ CPU → BIOS → hypervisor → kernel → userspace → enclave launch → DCAP
 
 ```bash
 git clone https://github.com/tpluslabs/gramine-cheker && cd gramine-cheker
+sudo ./run.sh            # everything: install.sh, then check.sh
+
 ./check.sh --no-run      # fast, read-only: hardware/BIOS/kernel/userspace
-sudo ./install.sh        # Gramine + aesmd + DCAP QPL (Ubuntu 22.04/24.04, Debian 12)
-sudo ./check.sh          # full: also builds, signs and runs a real enclave and asks for a quote
+sudo ./install.sh        # build tools + Gramine + aesmd + DCAP QPL (Ubuntu 22.04/24.04/26.04, Debian 12)
+sudo ./check.sh          # full: builds the probe, then builds, signs and runs a real enclave and asks for a quote
 ```
 
 Run as root to get the BIOS checks (they read MSR `0x3a`). Each run saves a report to
@@ -21,7 +23,8 @@ Kubernetes: `kubectl apply -f k8s/pod.yaml` (see the comments in the file).
 | `probe/sgx-cpuid.c` | reads raw CPUID leaf 7/0x12 and `IA32_FEATURE_CONTROL`, so it can tell "CPU lacks SGX" apart from "BIOS disabled it". Built on the fly if `cc` exists, else downloaded prebuilt from the `latest` release |
 | `.github/workflows/build.yml` | CI: lints the scripts and builds the probe as a static binary on every push/PR. Pushes to `main` update the rolling [`latest`](https://github.com/tpluslabs/gramine-cheker/releases/tag/latest) prerelease; `v*` tags get a versioned release. The binary ships with a `.sha256` |
 | `app/` | minimal enclave: prints `hello from enclave`, then gets a DCAP quote via `/dev/attestation/quote` |
-| `install.sh` | installs the runtime dependencies |
+| `install.sh` | installs build tools and the runtime dependencies |
+| `run.sh` | `install.sh` then `check.sh`, as root |
 | `k8s/pod.yaml` | runs the check inside a pod |
 
 ---
@@ -39,7 +42,7 @@ Gramine ≥ 1.9 supports **only** the upstream in-kernel driver, so **FLC is man
 | 5 | BIOS | SGX = **Enabled** (not "Software Controlled"), `IA32_FEATURE_CONTROL[18]` | `bios.sgx-enabled` |
 | 6 | BIOS | SGX Launch Control Policy = **Unlocked** (`IA32_FEATURE_CONTROL[17]`) | `bios.flc-enabled` |
 | 7 | BIOS | PRMRR/EPC size > 0; on Xeon Scalable, TME/TME-MT enabled (needed for SGX), and on multi-socket, UMA/NUMA settings as the board vendor requires | `epc` |
-| 8 | Hypervisor | For VMs: the VMM has to expose SGX and an EPC section to the guest. **No public cloud except Azure DC-series and Alibaba g7t/c7t/r7t does this.** TDX/SEV guests can't use SGX | `cpuid.*`, `confidential-vm` |
+| 8 | Hypervisor | For VMs: the VMM has to expose SGX and an EPC section to the guest. **No public cloud except Azure DCsv3/DCdsv3 (retiring) and Alibaba g7t/c7t/r7t does this.** TDX guests can't use SGX | `cpuid.*`, `confidential-vm` |
 | 9 | Kernel | Linux ≥ 5.11, `CONFIG_X86_SGX=y`, FSGSBASE enabled (≥ 5.9, no `nofsgsbase`) | `kernel.*` |
 | 10 | Kernel | `/dev/sgx_enclave` (rw for the user), `/dev/sgx_provision` (for attestation), `/dev` **not** `noexec` | `dev.*` |
 | 11 | Containers | Device nodes passed in (k8s: [Intel SGX device plugin](https://github.com/intel/intel-device-plugins-for-kubernetes), resources `sgx.intel.com/{epc,enclave,provision}`), aesmd socket reachable | `dev.*`, `aesmd` |
@@ -71,47 +74,19 @@ plus `attest.dcap-quote`.
 | Xeon Scalable 4th gen (x4xx) | Sapphire Rapids | yes | up to 512 GB, per SKU | also has TDX |
 | Xeon Scalable 5th gen (x5xx) | Emerald Rapids | yes | up to 512 GB, per SKU | also has TDX |
 | Xeon 6 P-core (6500P/6700P/6900P) | Granite Rapids | yes | per SKU | also has TDX |
+| Xeon 6+ E-core (69xxE+) | Clearwater Forest | per SKU | per SKU | 2026; SGX + TDX on all models |
+| Xeon 7 | Diamond Rapids | tbd | tbd | due 2027; Intel lists SGX + TDX |
 | Pentium/Celeron J/N 4xxx/5xxx | Gemini Lake | yes | 128 MB | lab/dev only |
 
 Verify on ARK before buying: Xeon E-2400 (Raptor Lake-E), Xeon W-3300, Xeon 6 E-core (Sierra Forest).
 
-### ❌ Not usable
-
-| CPU | Why |
-|---|---|
-| Xeon E3 v5/v6, Core 6th/7th gen (Skylake/Kaby Lake) | SGX1 **without FLC**, which Gramine ≥ 1.9 doesn't support |
-| Core 11th gen+ desktop/mobile | SGX removed/deprecated on client parts |
-| Xeon Scalable 1st/2nd gen (Skylake-SP, Cascade Lake: Gold 61xx/62xx, Silver 42xx), Cooper Lake | no SGX |
-| Xeon E5/E7 all versions, Xeon D-1500/D-2100 | no SGX |
-| All AMD (EPYC, Ryzen) | no SGX (SEV instead) |
+SGX isn't being phased out on servers; only client (Core) chips dropped it. New Xeons ship SGX and TDX side by side, and
+TDX attestation itself needs SGX enabled (its quoting enclave is an SGX enclave). So on bare metal you can run Gramine-SGX
+enclaves and TDX VMs on the same box. Only *inside* a TDX VM is SGX unavailable.
 
 ---
 
-## 3. Google Cloud (GCE / GKE)
-
-**Verdict: nothing on GCP runs Gramine-SGX.** Google exposes SGX on no machine type, bare metal included.
-Intel confidential computing on GCP means **TDX** (Confidential VM / Confidential GKE Nodes on C3), and SGX
-can't be used from inside a TD. AMD series offer SEV/SEV-SNP.
-
-| Series | CPU | Silicon has SGX+FLC? | SGX exposed? | Confidential option |
-|---|---|---|---|---|
-| N1, N2 (Cascade Lake), C2 | Skylake/Cascade Lake | no | no | – |
-| N2 (Ice Lake), M3 | Ice Lake-SP | yes | **no** | – |
-| C3, H3, A3 | Sapphire Rapids | yes | **no** | TDX (C3) |
-| `c3-{highcpu,standard,highmem}-192-metal` | Sapphire Rapids | yes | **no** (not documented) | none on metal |
-| `x4-*-metal`, `z3-*-metal` | Sapphire Rapids | yes | **no** | none on metal |
-| N4, C4 | Emerald/Granite Rapids | yes | **no** | – |
-| `c4-{standard,highmem}-288-metal` | Granite Rapids | yes | **no** (not documented) | none on metal |
-| N2D, C2D, C3D, C4D (+ `c4d-*-metal`), T2D | AMD EPYC | no | – | SEV/SEV-SNP |
-| C4A, T2A, A4X | Arm | no | – | – |
-
-Bare metal is the only place where SGX *could* leak through, if Google left it on in the BIOS.
-Run `sudo ./check.sh --no-run` on a `c3-*-metal` and a `c4-*-metal` to settle it. We expect
-`bios.sgx-enabled`/`kernel.flag.sgx` to FAIL. GKE pods on standard or Confidential nodes: expect `cpuid.sgx` FAIL.
-
-Gramine with TDX exists only as the experimental [gramine-tdx](https://github.com/gramineproject/gramine-tdx) fork, which is not production-ready and not covered here.
-
-Outside GCP/OVH, the public clouds with real SGX are Azure DCsv2/DCsv3/DCdsv3 and Alibaba g7t/c7t/r7t.
+Public clouds with real SGX: Azure DCsv3/DCdsv3 (closing, see [Azure](#azure)) and Alibaba g7t/c7t/r7t.
 
 ---
 
@@ -129,7 +104,7 @@ where you have no BIOS access.
 
 ### ✅ CPU capable (SGX + FLC)
 
-| Range | Plan | CPU |
+| Range | Plan | CPU | 
 |---|---|---|
 | Rise | RISE-1 | Xeon E-2386G |
 | Rise | RISE-2 | Xeon E-2388G |
@@ -151,16 +126,6 @@ where you have no BIOS access.
 Dual-socket HGR boxes need multi-package platform registration before DCAP quotes work (requirement 15).
 The E-2xxx boxes have a small EPC (128/512 MB), which is fine for small enclaves.
 
-### ❌ Not usable
-
-| Plan | CPU | Why |
-|---|---|---|
-| KS-3, KS-4, KS-5, KS-A, KS-GAME | E3-1245 v5, E3-1230 v6, E3-1270 v6, i7-6700K, i7-7700K | no FLC |
-| KS-1, KS-2, KS-STOR, KS-1-B, SYS-2 | Xeon D-15xx / D-21xx | no SGX |
-| KS-5-B, KS-6-B, KS-B, KS-C | Xeon E5 | no SGX |
-| SYS-3-P, SYS-5, SYS-6 | Silver 4214R, Gold 6132 | no SGX |
-| HGR-SAP-1/2/3 | Gold 6226R/6242R/6248R (Cascade Lake) | no SGX |
-| Advance (current), Scale-a*, HGR-*-a* | AMD EPYC | no SGX |
 
 ---
 
@@ -176,3 +141,45 @@ The E-2xxx boxes have a small EPC (128/512 MB), which is fine for small enclaves
 | `dev.*` | udev/group permissions, or the container didn't get the devices |
 | `run.gramine-sgx` | see the enclave log printed above it; often EPC too small or `noexec` |
 | `attest.dcap-quote` | aesmd not running, QPL/PCCS misconfigured, platform not registered |
+
+## Google Cloud (GCE / GKE)
+
+**Verdict: nothing on GCP runs Gramine-SGX.** Google exposes SGX on no machine type, bare metal included.
+Intel confidential computing on GCP means **TDX** (Confidential VM / Confidential GKE Nodes on C3), and SGX
+can't be used from inside a TD.
+
+## Azure
+
+**Verdict: only DCsv3/DCdsv3 run Gramine-SGX, and they are being retired.** From **2026-11-01** no new subscriptions get them
+(capacity-restricted), and they stop working on **2029-10-31**. Microsoft names no SGX successor: its migration guide points to
+TDX (DCesv6/DCedsv6) VMs or to Confidential Container Instances. The v6 series runs on Emerald
+Rapids, which has SGX in silicon, but inside a TDX VM the guest never sees it. Either get a DCsv3 subscription before
+2026-11-01, or plan on bare metal.
+
+Naming: `e` = Intel TDX, no letter = Intel SGX, `d` = local temp disk, `s` = premium storage.
+
+| Series | CPU | Isolation | Gramine-SGX | vCPU | RAM (4 GiB/vCPU¹) | Local temp disk | Max data disks | Network (Mbps) | Accel. net | Ephemeral OS | Status |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **DCsv3** | Intel Xeon Ice Lake, 3.5 GHz turbo | **SGX enclaves** + TME-MK; **EPC 4–256 GiB** (½ of RAM up to DC16, then 128/192/256) | ✅ | 1–48 **physical cores**¹ | 8–384 | none | 4–32 | not published | no | yes | GA; closed to new subs 2026-11-01; retires 2029-10-31 |
+| **DCdsv3** | same | same | ✅ | 1–48 cores¹ | 8–384 | 75–2,400 GiB | 4–32 | not published | **yes** | no | same as DCsv3 |
+| DCesv6 | Intel Xeon Platinum 8573C (Emerald Rapids), 3.0 GHz all-core, AMX | TDX CVM | ❌ (TDX only, `gramine-tdx` experimental) | 2–128 | 8–512 | none | 8–64 (Premium v2, Ultra) | 12,500–54,000 | no (MANA) | no | GA |
+| DCedsv6 | same | TDX CVM | ❌ | 2–128 | 8–512 | 110–7,040 GiB (up to 6 disks) | 8–64 | 7,000–40,000 | no | no | GA |
+
+¹ On DCsv3/DCdsv3 each unit is a physical core with no hyperthreading, and RAM is 8 GiB per core. DCesv6/DCedsv6 have
+4 GiB per vCPU.
+
+Common to all four: Gen2 VMs only, no live migration, no memory-preserving updates, no nested virtualization. DCesv6/DCedsv6 support confidential OS disk
+encryption with a customer- or platform-managed key (Key Vault / Managed HSM).
+
+The practical differences:
+- **Which kind of isolation.** DCsv3/DCdsv3 protect individual *processes* (SGX enclaves), which is what Gramine-SGX needs.
+  DCesv6/DCedsv6 protect the *whole VM* (TDX) and runs unmodified apps, no Gramine needed. The attestation is
+  then about the VM, so the trusted base includes the guest kernel.
+- **Attestation.** On DCsv3, DCAP quotes come through the Azure DCAP client / THIM cache, so no PCCS of your own. You may still
+  need to point `/etc/sgx_default_qcnl.conf` (or `az-dcap-client`) at it, and `check.sh` validates that. TDX VMs attest through vTPM +
+  Microsoft Azure Attestation or Intel Trust Authority.
+- **v3 → v6.** Newer CPU (AMX), up to 128 vCPUs / 512 GiB, twice the data disks, Premium SSD v2 / Ultra, published network
+  bandwidth up to 54 Gbps.
+
+Sources: Microsoft Learn size pages for each series (retrieved 2026-09-29) and the
+[DCsv3/DCdsv3 retirement guide](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/retirement/dcsv3-series-retirement).
