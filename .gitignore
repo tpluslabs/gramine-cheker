@@ -3,3 +3,4 @@ app/hello
 app/hello.manifest
 app/hello.manifest.sgx
 app/hello.sig
+results/*.txt

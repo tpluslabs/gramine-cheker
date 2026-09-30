@@ -21,6 +21,8 @@ echo "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-sgx-deb.asc] https://d
 $SUDO apt-get update
 $SUDO apt-get install -y gramine sgx-aesm-service libsgx-aesm-quote-ex-plugin \
     libsgx-aesm-ecdsa-plugin libsgx-dcap-default-qpl
+# Dropped by Intel after PSW 2.27 (FLC needs no launch enclave): still in the 22.04/24.04 repos, absent from 26.04.
+$SUDO apt-get install -y libsgx-aesm-launch-plugin || echo "libsgx-aesm-launch-plugin not available: skipped (optional)"
 
 for g in sgx sgx_prv; do getent group $g >/dev/null && $SUDO usermod -aG $g "$(id -un)"; done
 
