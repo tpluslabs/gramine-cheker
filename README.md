@@ -126,6 +126,20 @@ where you have no BIOS access.
 Dual-socket HGR boxes need multi-package platform registration before DCAP quotes work (requirement 15).
 The E-2xxx boxes have a small EPC (128/512 MB), which is fine for small enclaves.
 
+## Hetzner bare metal
+
+Source: Intel ARK and Hetzner product pages, checked 2026-10-06. Nothing tested yet.
+
+| Plan | CPU | Max EPC per CPU | Notes |
+|---|---|---|---|
+| DX154 | Xeon 6741P (Granite Rapids) | 128 GB | Hetzner names SGX + EPC for this box ([press release](https://www.hetzner.com/pressroom/neue-enterprise-hardware-von-dell-2026/)) |
+| EX131 | Xeon 6731P (Granite Rapids) | 128 GB | CPU capable; Hetzner says nothing about SGX in BIOS |
+| DX294 | 2× Xeon 6787P (Granite Rapids) | 512 GB | dual socket, so needs multi-package registration (requirement 15) |
+
+Hetzner has no SGX toggle. Before ordering, ask support whether SGX is enabled in BIOS (or for KVM/BIOS access) and
+whether all memory channels are populated symmetrically. A box can report SGX on and still have zero EPC: the OVH
+Scale-i1 (Xeon 6517P) does. So run `check.sh` on one box first.
+
 
 ---
 
